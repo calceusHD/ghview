@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Page Title</title>
+<style>
+        div {
+            table-layout: fixed;
+        }
+        </style>
+<script type="text/javascript">
+//<![CDATA[
+var blob = new Blob(Array.prototype.map.call(document.querySelectorAll('script[type=\'text\/js-worker\']'), function (oScript) { return oScript.textContent; }),{type: 'text/javascript'});
+
+//codeworker = new Worker(window.URL.createObjectURL(blob));
+codeworker = new Worker("code.js");
+
+(loadFile = function(){
+    var file_el = document.getElementById("fileToUpload").files[0];
+    codeworker.onmessage = function(e) {
+        if (e.data.type == "HIE") {
+            document.getElementById("tree").innerHTML = e.data.val;
+        } else if (e.data.type == "VAL") {
+            
+            i = e.data.val[1];
+            //for (i of e.data.val) {
+                var str = "<path fill='none' stroke='black' d='M0 0 ";
+                if (i.steps.length > 0) {
+                    var current_time = i.steps[0].snap_time;
+                    for (j = 1; j < i.steps.length; ++j) {
+                        str += "l" + (i.steps[j].snap_time - current_time)/50000 + " 0 l 0 5 ";
+                        current_time = i.steps[j].snap_time;
+                    }
+                }
+                str += "'/>";
+            //}
+            document.getElementById("mySVG").innerHTML = str;
+        }
+    };
+    codeworker.postMessage(file_el);
+    
+    console.log("oof");
+});
+
+(reloadscr = function() {
+    codeworker.terminate();
+    codeworker = new Worker("code.js");
+    codeworker.onmessage = function(e) {
+        document.getElementById("tree").innerHTML = e.data;
+    };
+    /*
+    if (document.getElementById("autoscript")) {
+        document.getElementById("autoscript").parentNode.removeChild(document.getElementById("autoscript"));
+    }
+    var script = document.createElement('script');
+    script.id = "autoscript";
+    script.onload = function () {
+        //do stuff with the script
+    };
+    script.src = "code.js";
+
+    document.head.appendChild(script);*/
+});
+
+(cleartree = function() {
+    document.getElementById("tree").innerHTML = "";
+});
+
+//reloadscr();
+var i = 10;
+if (i < 5) {
+  // some code
+  
+}
+//]]>
+</script>
+</head>
+<body>
+<button type="button" onclick="reloadscr()">REEEEload</button>
+<button type="button" onclick="loadFile()">Load File</button>
+<input type="file" name="fileToUpload" id="fileToUpload">
+<button type="button" onclick="cleartree()">Clear</button>
+
+<div style="width: 100%; display:table">
+    <div style="display: table-row">
+        <div style="display:table-cell; width: 400px; overflow: scroll">
+            <ul id="tree"></ul>
+        </div>
+        <div style="display:table-cell;">
+                <svg id="mySVG" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"></svg>
+        </div>
+    </div>
+</div>
+<pre id="debug"></pre>
+</body>
+</html>
