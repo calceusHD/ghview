@@ -3,8 +3,33 @@
 <head>
 <title>Page Title</title>
 <style>
+        html {
+            background-color: black;
+        }
         div {
             table-layout: fixed;
+        }
+        .hie_elem {
+            white-space: nowrap;
+        }
+        ul {
+            list-style-type: none;
+            padding-left: 16px;
+        }
+        * {
+            font-family: sans-serif;
+            color: #EEE;
+        }
+        button {
+            color: #000;
+        }
+        .collapsed {
+            display: none;
+        }
+        body, html {
+            width: 100%;
+            height: 100%;
+            margin: 0px;
         }
         </style>
 <script type="text/javascript">
@@ -20,23 +45,43 @@ codeworker = new Worker("code.js");
         if (e.data.type == "HIE") {
             document.getElementById("tree").innerHTML = e.data.val;
         } else if (e.data.type == "VAL") {
-            
-            i = e.data.val[1];
-            //for (i of e.data.val) {
-                var str = "<path fill='none' stroke='black' d='M0 0 ";
-                if (i.steps.length > 0) {
-                    var current_time = i.steps[0].snap_time;
-                    for (j = 1; j < i.steps.length; ++j) {
-                        str += "l" + (i.steps[j].snap_time - current_time)/50000 + " 0 l 0 5 ";
-                        current_time = i.steps[j].snap_time;
+            return;
+            var svg_el = document.getElementById("svgholder");
+            //var i = e.data.val.sigs[1];
+            var end_time = e.data.val.end_time;
+            for (var i of e.data.val.sigs.slice(0, 1000)) {
+                var svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+                var str = "<path fill='none' stroke='black' d='M1 1 ";
+                if (i.length > 0) {
+                    var current_time = i[0].snap_time;
+                    var toggle = false;
+                    for (j = 1; j < i.length; ++j) {
+                        str += "l" + (i[j].snap_time - current_time)/500000 + " 0 l 0 " + (toggle ? "-" : "") + "15 ";
+                        toggle = !toggle;
+                        current_time = i[j].snap_time;
+                    }
+                    if (current_time < end_time) {
+                        str += "l" + (end_time - current_time)/500000 + " 0 ";
                     }
                 }
                 str += "'/>";
-            //}
-            document.getElementById("mySVG").innerHTML = str;
+                svg.setAttribute("width", (end_time/500000) + "px");
+                svg.setAttribute("height", 20 + "px");
+                svg.setAttribute("margin", 0 + "px");
+                svg.setAttribute("padding", 0 + "px");
+                svg.setAttribute("border", 0 + "px");
+                svg.innerHTML = str;
+                svg_el.appendChild(svg);
+            } 
+        } else if (e.data.type == "INNER") {
+            var target = document.querySelectorAll("[data-location='" + e.data.val.loc + "']")[0];
+            target.parentElement.innerHTML += e.data.val.html;
+
+        } else if (e.data.type == "SIGNAL") {
+            var elem = document.getElementById("signal_view").innerHTML = e.data.val.html;
         }
     };
-    codeworker.postMessage(file_el);
+    codeworker.postMessage({type: "LOAD_FILE", val: file_el});
     
     console.log("oof");
 });
@@ -65,6 +110,71 @@ codeworker = new Worker("code.js");
     document.getElementById("tree").innerHTML = "";
 });
 
+(collapse = function(e) {
+    var parent = e.parentNode;
+    if (!parent.dataset["loaded"]) {
+        parent.dataset["loaded"] = true;
+        codeworker.postMessage({type: "GET_INNER", val: (parent.dataset["location"] || "")});
+    } else if (parent.nextSibling) {
+        parent.nextSibling.classList.toggle("collapsed");
+    }
+    var a = event.target;
+});
+
+(make_resize = function(elem) {
+    var resizer = document.createElement("div");
+    resizer.className = "resizer";
+    resizer.style.width = "5px";
+    resizer.style.height = "100%";
+    resizer.style.background = "green";
+    resizer.style.display = "inline-block";
+    resizer.style.cursor = "e-resize";
+    resizer.style.flexShrink = 0;
+    resizer.style.right = 0;
+    elem.appendChild(resizer);
+    var init_resize = function(e) {
+        var resize = function(e) {
+            elem.style.width = (e.clientX - elem.offsetLeft) + "px";
+        };
+        var stop_resize = function(e) {
+            window.removeEventListener("mousemove", resize, false);
+            window.removeEventListener("mouseup", stop_resize, false);
+        };
+        window.addEventListener("mousemove", resize, false);
+        window.addEventListener("mouseup", stop_resize, false);
+    };
+    resizer.addEventListener("mousedown", init_resize, false);
+});
+
+
+
+
+
+(load_fn = function() {
+    make_resize(document.getElementById("resize"));
+    make_resize(document.getElementById("resize2"));
+});
+
+(allow_drop = function(e) {
+    e.preventDefault();
+});
+
+(drag = function(e) {
+    var tmp = e.target.dataset["location"];
+    e.dataTransfer.setData("text", tmp);
+});
+
+(drop = function(e) {
+    e.preventDefault();
+    var o = e.dataTransfer.getData("text");
+    codeworker.postMessage({type: "GET_SIGNAL", val: o});
+    //alert(e.dataTransfer.getData("text"));
+});
+
+document.addEventListener('DOMContentLoaded', load_fn, false);
+
+
+
 //reloadscr();
 var i = 10;
 if (i < 5) {
@@ -74,22 +184,45 @@ if (i < 5) {
 //]]>
 </script>
 </head>
-<body>
-<button type="button" onclick="reloadscr()">REEEEload</button>
-<button type="button" onclick="loadFile()">Load File</button>
-<input type="file" name="fileToUpload" id="fileToUpload">
-<button type="button" onclick="cleartree()">Clear</button>
-
-<div style="width: 100%; display:table">
-    <div style="display: table-row">
-        <div style="display:table-cell; width: 400px; overflow: scroll">
-            <ul id="tree"></ul>
-        </div>
-        <div style="display:table-cell;">
-                <svg id="mySVG" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"></svg>
+<body style="display: flex; flex-direction: column;">
+<div id="header" style="flex-grow: 0;">
+    <button type="button" onclick="reloadscr()">REEEEload</button>
+    <button type="button" onclick="loadFile()">Load File</button>
+    <input type="file" name="fileToUpload" id="fileToUpload">
+    <button type="button" onclick="cleartree()">Clear</button>
+</div>
+<!--<div style="line-height: 0px" id="svgholder">
+    <svg id="mySVG" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"></svg>
+</div>-->
+<div style="flex-grow: 1; display: flex; flex-direction: row; overflow: hidden;">
+    <div style="flex-grow: 0; flex-shrink: 0;height: 100%;width: 300px; display: flex; overflow: hidden;" id="resize">
+        <div style="overflow: scroll; flex-grow: 1;">
+            <div style="display: inline-block;">
+                <ul id="tree"></ul>
+            </div>
         </div>
     </div>
+    <div id="waveforms" style="flex-grow: 1; flex-direction: row; overflow-y: scroll;" ondrop="drop(event)" ondragover="allow_drop(event);">
+        <div style="display: flex;">
+            <div style="flex-grow: 0; flex-shrink: 0;">
+                <div style="width: 300px; display: flex; height: 100%;" id="resize2">
+                    <div style="display: inline-block; flex-grow: 1; height: fit-content;">
+                        <ul id="signal_list"><li>as</li></ul>
+
+                        
+                    </div>
+                </div>
+            </div>
+            <div style="flex-grow: 1; overflow-x: scroll; height: fit-content;">
+
+                <ul id="signal_view"><li><span class="hie_elem">oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof oof </span></li>
+                    
+                    <li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li><li>oof</li></ul>    
+
+            </div>
+        </div>
+        
+    </div>
 </div>
-<pre id="debug"></pre>
 </body>
 </html>
